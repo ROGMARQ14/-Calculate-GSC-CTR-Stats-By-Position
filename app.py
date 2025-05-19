@@ -32,12 +32,31 @@ if uploaded_file is not None:
         st.dataframe(df.head())
         
         # Validate required columns
-        required_columns = ['Position', 'Clicks', 'Impressions', 'CTR']
-        missing_columns = [col for col in required_columns if col not in df.columns]
+        required_columns = [['Position', 'Avg.Position'], 'Clicks', 'Impressions', 'CTR']
+        missing_columns = []
         
+        # Handle Position column variants
+        position_column = None
+        for pos_col in ['Position', 'Avg.Position', 'Avg. Position']:
+            if pos_col in df.columns:
+                position_column = pos_col
+                break
+        
+        if position_column is None:
+            missing_columns.append('Position/Avg.Position')
+        
+        # Check other required columns
+        for col in required_columns[1:]:  # Skip the first item which we already handled
+            if col not in df.columns:
+                missing_columns.append(col)
+                
         if missing_columns:
             st.error(f"Missing required columns: {', '.join(missing_columns)}. Please make sure your CSV file contains these columns.")
         else:
+            # Normalize column names for consistency in the rest of the code
+            if position_column != 'Position':
+                df['Position'] = df[position_column]
+            
             # Set maximum positions to analyze
             max_positions = st.slider("Maximum Position to Analyze", min_value=1, max_value=20, value=9)
             
