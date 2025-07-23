@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 import base64
 import io
 
@@ -31,31 +30,47 @@ if uploaded_file is not None:
         st.subheader("Raw Google Search Console Data")
         st.dataframe(df.head())
         
-        # Validate required columns
-        required_columns = [['Position', 'Avg.Position'], 'Clicks', 'Impressions', 'CTR']
+        # Define column name mappings for different possible column names
+        column_mappings = {
+            'Query': ['Query', 'query', 'queries', 'Queries', 'keywords', 'keyword', 'Keyword', 'Keywords'],
+            'Landing Page': ['Landing Page', 'landing page', 'URLs', 'Address', 'address'],
+            'Clicks': ['Clicks', 'clicks'],
+            'Impressions': ['Impressions', 'impressions'],
+            'CTR': ['CTR', 'Avg. CTR', 'URL CTR'],
+            'Position': ['Position', 'Avg. Position', 'Avg Position', 'Avg. Pos', 'Avg Pos', 'Positions', 'positions', 'Pos', 'pos']
+        }
+        
+        # Find actual column names in the dataframe
+        actual_columns = {}
         missing_columns = []
         
-        # Handle Position column variants
-        position_column = None
-        for pos_col in ['Position', 'Avg.Position', 'Avg. Position']:
-            if pos_col in df.columns:
-                position_column = pos_col
-                break
+        for standard_name, possible_names in column_mappings.items():
+            found = False
+            for possible_name in possible_names:
+                if possible_name in df.columns:
+                    actual_columns[standard_name] = possible_name
+                    found = True
+                    break
+            
+            if not found:
+                missing_columns.append(standard_name)
         
-        if position_column is None:
-            missing_columns.append('Position/Avg.Position')
+        # Check for essential columns (Query, Clicks, Impressions, CTR, Position)
+        essential_columns = ['Query', 'Clicks', 'Impressions', 'CTR', 'Position']
+        missing_essential = [col for col in essential_columns if col in missing_columns]
         
-        # Check other required columns
-        for col in required_columns[1:]:  # Skip the first item which we already handled
-            if col not in df.columns:
-                missing_columns.append(col)
-                
-        if missing_columns:
-            st.error(f"Missing required columns: {', '.join(missing_columns)}. Please make sure your CSV file contains these columns.")
+        if missing_essential:
+            st.error(f"Missing required columns: {', '.join(missing_essential)}. Please make sure your CSV file contains these columns.")
+            st.info("Expected column names:")
+            for col in missing_essential:
+                st.write(f"- {col}: {', '.join(column_mappings[col])}")
         else:
-            # Normalize column names for consistency in the rest of the code
-            if position_column != 'Position':
-                df['Position'] = df[position_column]
+            # Rename columns to standard names
+            rename_dict = {actual_name: standard_name for standard_name, actual_name in actual_columns.items()}
+            df = df.rename(columns=rename_dict)
+            
+            st.success("Successfully identified all required columns!")
+            st.info(f"Columns found: {', '.join([f'{actual_columns[col]} → {col}' for col in essential_columns])}")
             
             # Set maximum positions to analyze
             max_positions = st.slider("Maximum Position to Analyze", min_value=1, max_value=20, value=9)
@@ -96,18 +111,8 @@ if uploaded_file is not None:
                                 ctr_max = int(df1['CTR_numeric'].max())
                                 
                                 # Get the keyword with maximum CTR
-                                # Check various possible column names for the keyword
-                                kw_col = None
-                                for col_option in ['Top queries', 'Query', 'Keyword', 'Keywords']:
-                                    if col_option in df1.columns:
-                                        kw_col = col_option
-                                        break
-                                
-                                if kw_col:
-                                    ctr_max_kw = df1.iloc[0][kw_col]
-                                else:
-                                    # If no keyword column is found, use the first column
-                                    ctr_max_kw = df1.iloc[0].iloc[0] 
+                                kw_col = 'Query'  # Now we know it's standardized
+                                ctr_max_kw = df1.iloc[0][kw_col]
                                 
                                 clicks = int(df1['Clicks'].sum())
                                 impressions = int(df1['Impressions'].sum())
@@ -174,7 +179,7 @@ if st.checkbox("Don't have a GSC file? Use sample data instead"):
         'Clicks': [120, 95, 80, 65, 50, 35, 25, 15, 10],
         'Impressions': [1000, 900, 850, 800, 750, 700, 650, 600, 550],
         'CTR': ['12%', '10.5%', '9.4%', '8.1%', '6.7%', '5%', '3.8%', '2.5%', '1.8%'],
-        'Top queries': ['seo tips', 'python seo', 'seo guide', 'search console', 'gsc api', 'seo reporting', 'ctr analysis', 'position tracking', 'rank checker']
+        'Query': ['seo tips', 'python seo', 'seo guide', 'search console', 'gsc api', 'seo reporting', 'ctr analysis', 'position tracking', 'rank checker']
     }
     sample_df = pd.DataFrame(sample_data)
     st.subheader("Sample Data")
@@ -185,7 +190,7 @@ if st.checkbox("Don't have a GSC file? Use sample data instead"):
         df = sample_df
         max_positions = 5
         
-        # ... (similar processing logic as above)
+        # Create variables and empty dataframe
         x = 1
         y = max_positions + 1
         d = {'Position': [], 'Sum Clicks': [], 'Sum Impressions':[], 'Avg CTR':[],'Min CTR':[],'Max CTR':[],'Max CTR KW':[]}
@@ -207,7 +212,7 @@ if st.checkbox("Don't have a GSC file? Use sample data instead"):
                         ctr = int(round((df1['Clicks'].sum() / df1['Impressions'].sum()) * 100))
                         ctr_min = int(df1['CTR_numeric'].min())
                         ctr_max = int(df1['CTR_numeric'].max())
-                        ctr_max_kw = df1.iloc[0]['Top queries']
+                        ctr_max_kw = df1.iloc[0]['Query']
                         clicks = int(df1['Clicks'].sum())
                         impressions = int(df1['Impressions'].sum())
                         
